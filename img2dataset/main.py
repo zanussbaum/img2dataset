@@ -15,11 +15,7 @@ from .writer import (
 )
 from .reader import Reader
 from .downloader import Downloader
-from .distributor import (
-    multiprocessing_distributor,
-    pyspark_distributor,
-    ray_distributor,
-)
+from .distributor import multiprocessing_distributor, pyspark_distributor
 import fsspec
 import sys
 import signal
@@ -33,14 +29,6 @@ def arguments_validator(params):
     if params["compute_hash"] not in [None, "md5", "sha256", "sha512"]:
         hash_type = params["compute_hash"]
         raise ValueError(f"Unsupported hash to compute: {hash_type}")
-
-    if params["verify_hash"] is not None:
-        _, verify_hash_type = params["verify_hash"]
-        if verify_hash_type != params["compute_hash"]:
-            raise ValueError(
-                "verify_hash and compute_hash must be the same "
-                f"but got {verify_hash_type} and {params['compute_hash']}"
-            )
 
     if params["save_additional_columns"] is not None:
         save_additional_columns_set = set(params["save_additional_columns"])
@@ -96,7 +84,6 @@ def download(
     wandb_project: str = "img2dataset",
     oom_shard_count: int = 5,
     compute_hash: Optional[str] = "sha256",
-    verify_hash: Optional[List[str]] = None,
     distributor: str = "multiprocessing",
     subjob_size: int = 1000,
     retries: int = 0,
@@ -147,7 +134,6 @@ def download(
     save_caption = caption_col is not None
 
     fs, output_path = fsspec.core.url_to_fs(output_folder)
-    start_shard_id = 0
 
     if not fs.exists(output_path):
         fs.mkdir(output_path)
@@ -158,10 +144,6 @@ def download(
         elif incremental_mode == "overwrite":
             fs.rm(output_path, recursive=True)
             fs.mkdir(output_path)
-            done_shards = set()
-        elif incremental_mode == "extend":
-            existing_shards = [int(x.split("/")[-1].split("_")[0]) for x in fs.glob(output_path + "/*.json")]
-            start_shard_id = max(existing_shards, default=-1) + 1
             done_shards = set()
         else:
             raise ValueError(f"Unknown incremental mode {incremental_mode}")
@@ -175,24 +157,15 @@ def download(
         else:
             save_additional_columns.append(bbox_col)
 
-    if verify_hash is not None:
-        verify_hash_col, verify_hash_type = verify_hash
-    else:
-        verify_hash_col = None
-        verify_hash_type = None
-
     reader = Reader(
         url_list,
         input_format,
         url_col,
         caption_col,
-        verify_hash_col,
-        verify_hash_type,
         save_additional_columns,
         number_sample_per_shard,
         done_shards,
         tmp_path,
-        start_shard_id,
     )
 
     if output_format == "webdataset":
@@ -241,7 +214,6 @@ def download(
         number_sample_per_shard=number_sample_per_shard,
         oom_shard_count=oom_shard_count,
         compute_hash=compute_hash,
-        verify_hash_type=verify_hash_type,
         encode_format=encode_format,
         retries=retries,
         user_agent_token=user_agent_token,
@@ -254,8 +226,6 @@ def download(
         distributor_fn = multiprocessing_distributor
     elif distributor == "pyspark":
         distributor_fn = pyspark_distributor
-    elif distributor == "ray":
-        distributor_fn = ray_distributor
     else:
         raise ValueError(f"Distributor {distributor} not supported")
 
@@ -267,9 +237,7 @@ def download(
         max_shard_retry,
     )
     logger_process.join()
-
-    if not hasattr(fs, "s3"):
-        fs.rm(tmp_dir, recursive=True)
+    fs.rm(tmp_dir, recursive=True)
 
 
 def main():

@@ -18,7 +18,8 @@ class BufferedParquetWriter:
         self.schema = schema
         self._initiatlize_buffer()
         fs, output_path = fsspec.core.url_to_fs(output_file)
-        self.output_fd = fs.open(output_path, "wb")
+
+        self.output_fd = fs.open(output_path, "wb", acl="private")
         self.parquet_writer = pq.ParquetWriter(self.output_fd, schema)
 
     def _initiatlize_buffer(self):
@@ -109,7 +110,7 @@ class WebDatasetSampleWriter:
         )
         self.shard_id = shard_id
         fs, output_path = fsspec.core.url_to_fs(output_folder)
-        self.tar_fd = fs.open(f"{output_path}/{shard_name}.tar", "wb")
+        self.tar_fd = fs.open(f"{output_path}/{shard_name}.tar", "wb", acl="private")
         self.tarwriter = wds.TarWriter(self.tar_fd)
         self.save_caption = save_caption
         self.buffered_parquet_writer = BufferedParquetWriter(output_folder + "/" + shard_name + ".parquet", schema, 100)
@@ -271,12 +272,12 @@ class FilesSampleWriter:
         """Write sample to disk"""
         if img_str is not None:
             filename = f"{self.subfolder}/{key}.{self.encode_format}"
-            with self.fs.open(filename, "wb") as f:
+            with self.fs.open(filename, "wb", acl="private") as f:
                 f.write(img_str)
             if self.save_caption:
                 caption = str(caption) if caption is not None else ""
                 caption_filename = f"{self.subfolder}/{key}.txt"
-                with self.fs.open(caption_filename, "w") as f:
+                with self.fs.open(caption_filename, "w", acl="private") as f:
                     f.write(str(caption))
 
             # some meta data may not be JSON serializable
@@ -285,7 +286,7 @@ class FilesSampleWriter:
                     meta[k] = v.tolist()
             j = json.dumps(meta, indent=4)
             meta_filename = f"{self.subfolder}/{key}.json"
-            with self.fs.open(meta_filename, "w") as f:
+            with self.fs.open(meta_filename, "w", acl="private") as f:
                 f.write(j)
         self.buffered_parquet_writer.write(meta)
 

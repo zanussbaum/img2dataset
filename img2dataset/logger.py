@@ -187,7 +187,7 @@ def write_stats(
         shard_id=shard_id, oom_shard_count=oom_shard_count
     )
     json_file = f"{output_path}/{shard_name}_stats.json"
-    with fs.open(json_file, "w") as f:
+    with fs.open(json_file, "w", acl="private") as f:
         json.dump(stats, f, indent=4)
 
 
@@ -247,7 +247,7 @@ class LoggerProcess(multiprocessing.context.SpawnProcess):
 
                 # read new stats files
                 for stats_file in new_stats_files:
-                    with fs.open(stats_file, "r") as f:
+                    with fs.open(stats_file, "r", acl="private") as f:
                         try:
                             stats = json.load(f)
                             SpeedLogger("worker", enable_wandb=self.enable_wandb)(
